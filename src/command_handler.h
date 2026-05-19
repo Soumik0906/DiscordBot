@@ -24,14 +24,20 @@ class CommandHandler
     void register_with_discord(dpp::cluster &bot)
     {
         if (dpp::run_once<struct register_bot_commands>()) {
+            std::vector<dpp::slashcommand> slash_commands;
+
             for (const auto &[name, cmd] : commands) {
                 dpp::slashcommand slash_cmd(
                     cmd->get_name(), cmd->get_description(), bot.me.id);
+                
                 for (const auto &opt : cmd->get_options()) {
                     slash_cmd.add_option(opt);
                 }
-                bot.global_command_create(slash_cmd);
+
+                slash_commands.push_back(slash_cmd);
             }
+
+            bot.global_bulk_command_create(slash_commands);
         }
     }
 

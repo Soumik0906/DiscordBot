@@ -1,6 +1,7 @@
 #include "command_handler.h"
 #include "commands/ping.h"
 #include "commands/schedule.h"
+#include "scheduler.h"
 
 #include <cstdlib>
 #include <dpp/dpp.h>
@@ -20,9 +21,10 @@ int main()
 
     dpp::cluster bot(token);
     CommandHandler handler{};
+    Scheduler scheduler{};
 
     handler.register_command<PingCommand>();
-    handler.register_command<ScheduleCommand>();
+    handler.register_command<ScheduleCommand>(scheduler);
 
     bot.on_log(dpp::utility::cout_logger());
 

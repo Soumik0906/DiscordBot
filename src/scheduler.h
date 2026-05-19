@@ -6,6 +6,7 @@
 #include <memory>
 #include <thread>
 #include <functional>
+#include <chrono>
 
 class Scheduler
 {
