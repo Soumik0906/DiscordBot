@@ -139,7 +139,7 @@ class ScheduleCommand : public Command
                 .add_option(dpp::command_option(dpp::co_string, "time", "HH:MM", true)),
 
             dpp::command_option(dpp::co_sub_command, "recurring", "Schedule a recurring message")
-                .add_option(dpp::command_option(dpp::co_string, "interval", "Interval (1d, 1h 30m, 5m)", true))
+                .add_option(dpp::command_option(dpp::co_string, "interval", "Interval (1d, 1h 30m, 5m 5s)", true))
                 .add_option(dpp::command_option(dpp::co_string, "message", "Message to be scheduled", true))
                 .add_option(dpp::command_option(dpp::co_channel, "channel", "Destination channel", true))
                 .add_option(dpp::command_option(dpp::co_string, "date", "DD/MM/YYYY (or) today (or) tomorrow", false))
@@ -215,12 +215,12 @@ class ScheduleCommand : public Command
 
                     scheduler.schedule_once(delay, [&scheduler = this->scheduler, task, interval]() {
                         task();
-                        scheduler.schedule_once(interval, task);
+                        scheduler.schedule_recurring(interval, task);
                     });
                 }
                 else
                 {
-                    scheduler.schedule_once(interval, task);
+                    scheduler.schedule_recurring(interval, task);
                 }
 
                 event.reply(dpp::message("Recurring message set!").set_flags(dpp::m_ephemeral));

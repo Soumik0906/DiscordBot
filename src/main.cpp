@@ -21,7 +21,7 @@ int main()
 
     dpp::cluster bot(token);
     CommandHandler handler{};
-    Scheduler scheduler{};
+    Scheduler scheduler{bot};
 
     handler.register_command<PingCommand>();
     handler.register_command<ScheduleCommand>(scheduler);
