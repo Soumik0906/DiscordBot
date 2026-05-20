@@ -8,7 +8,6 @@
 #include <set>
 #include <chrono>
 #include <string>
-#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -112,11 +111,11 @@ public:
             // Insert into database and retrieve the generated serial ID
             ConnectionGuard guard;
             pqxx::work txn{ guard.get() };
-            pqxx::result res{ txn.exec(
+            pqxx::result res = txn.exec_params(
                 "INSERT INTO scheduled_messages (type, channel_id, message_text, next_run_time) "
                 "VALUES ('once', $1, $2, $3) RETURNING id;",
-                { static_cast<uint64_t>(channel_id), message_text, time_str }
-            )};
+                static_cast<uint64_t>(channel_id), message_text, time_str
+            );
             new_id = res[0][0].as<int>();
             txn.commit();
         }
@@ -147,55 +146,55 @@ public:
     }
 
     // Schedules a recurring message
-        void schedule_recurring(
-            dpp::snowflake channel_id,
-            const std::string& message_text,
-            std::chrono::system_clock::time_point target_time,
-            std::chrono::seconds interval,
-            const std::string& interval_str
-        )
+    void schedule_recurring(
+        dpp::snowflake channel_id,
+        const std::string& message_text,
+        std::chrono::system_clock::time_point target_time,
+        std::chrono::seconds interval,
+        const std::string& interval_str
+    )
+    {
+        int new_id = 0;
+        std::string time_str = format_db_time(target_time);
+
+        // Insert into database and retrieve the generated serial ID
+        try
         {
-            int new_id = 0;
-            std::string time_str = format_db_time(target_time);
-
-            // Insert into database and retrieve the generated serial ID
-            try
-            {
-                ConnectionGuard guard;
-                pqxx::work txn{ guard.get() };
-                pqxx::result res = txn.exec(
-                    "INSERT INTO scheduled_messages (type, channel_id, message_text, next_run_time, interval_seconds, interval_str) "
-                    "VALUES ('recurring', $1, $2, $3, $4, $5) RETURNING id;",
-                    { static_cast<uint64_t>(channel_id), message_text, time_str, interval.count(), interval_str }
-                );
-                new_id = res[0][0].as<int>();
-                txn.commit();
-            }
-            catch (const std::exception& e)
-            {
-                std::cerr << "[Scheduler Error] Failed to save recurring job to DB: " << e.what() << '\n';
-                throw;
-            }
-
-            // Add to the in-memory set cache safely
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                ScheduledJob job;
-                job.id = new_id;
-                job.type = "recurring";
-                job.channel_id = channel_id;
-                job.message_text = message_text;
-                job.next_run_time = target_time;
-                job.interval = interval;
-                job.interval_str = interval_str;
-
-                jobs.insert(job);
-            }
-
-            // Notify worker thread
-            cv_.notify_one();
-            std::cout << "[Scheduler] Scheduled recurring message ID " << new_id << " starting " << time_str << " (every " << interval_str << ")\n";
+            ConnectionGuard guard;
+            pqxx::work txn{ guard.get() };
+            pqxx::result res = txn.exec_params(
+                "INSERT INTO scheduled_messages (type, channel_id, message_text, next_run_time, interval_seconds, interval_str) "
+                "VALUES ('recurring', $1, $2, $3, $4, $5) RETURNING id;",
+                static_cast<uint64_t>(channel_id), message_text, time_str, interval.count(), interval_str
+            );
+            new_id = res[0][0].as<int>();
+            txn.commit();
         }
+        catch (const std::exception& e)
+        {
+            std::cerr << "[Scheduler Error] Failed to save recurring job to DB: " << e.what() << '\n';
+            throw;
+        }
+
+        // Add to the in-memory set cache safely
+        {
+            std::lock_guard lock(mutex_);
+            ScheduledJob job;
+            job.id = new_id;
+            job.type = "recurring";
+            job.channel_id = channel_id;
+            job.message_text = message_text;
+            job.next_run_time = target_time;
+            job.interval = interval;
+            job.interval_str = interval_str;
+
+            jobs.insert(job);
+        }
+
+        // Notify worker thread
+        cv_.notify_one();
+        std::cout << "[Scheduler] Scheduled recurring message ID " << new_id << " starting " << time_str << " (every " << interval_str << ")\n";
+    }
 
 private:
     dpp::cluster& bot;
@@ -237,7 +236,7 @@ private:
             {
                 ConnectionGuard guard;
                 pqxx::work txn{ guard.get() };
-                txn.exec("DELETE FROM scheduled_messages WHERE id = $1;", job.id);
+                txn.exec_params("DELETE FROM scheduled_messages WHERE id = $1;", job.id);
                 txn.commit();
             }
             catch (const std::exception& e)
@@ -263,8 +262,8 @@ private:
             {
                 ConnectionGuard guard;
                 pqxx::work txn{ guard.get() };
-                txn.exec("UPDATE scheduled_messages SET next_run_time = $1 WHERE id = $2;",
-                    { format_db_time(new_next_run), job.id });
+                txn.exec_params("UPDATE scheduled_messages SET next_run_time = $1 WHERE id = $2;",
+                    format_db_time(new_next_run), job.id);
                 txn.commit();
             }
             catch (const std::exception& e)

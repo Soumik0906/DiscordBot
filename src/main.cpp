@@ -93,6 +93,8 @@ void connect_database()
 
 int main()
 {
+    tzset();
+
     const char *token{ std::getenv("BOT_TOKEN") };
 
     if (token)
