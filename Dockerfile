@@ -45,6 +45,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     libpqxx-7.8t64 \
     libpq5 \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp
