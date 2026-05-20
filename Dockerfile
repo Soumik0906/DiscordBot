@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
     libopus-dev \
     libsodium-dev \
     libssl-dev \
-    ca-certificates
+    ca-certificates \
+    libpqxx-dev
 
 # Download and install precompiled D++ deb package
 WORKDIR /tmp
@@ -42,6 +43,8 @@ RUN apt-get update && apt-get install -y \
     libsodium23 \
     openssl \
     ca-certificates \
+    libpqxx-7.8t64 \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp

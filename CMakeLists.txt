@@ -10,10 +10,12 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 find_package(DPP REQUIRED)
 find_package(Threads REQUIRED)
+find_package(libpqxx REQUIRED)
 
 target_link_libraries(${PROJECT_NAME}
         ${DPP_LIBRARIES}
         Threads::Threads
+        libpqxx::pqxx
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
