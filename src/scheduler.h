@@ -229,57 +229,63 @@ private:
     // Executes a scheduled job (updates database and the cache)
     void execute_job(const ScheduledJob& job)
     {
+        bot.message_create({job.channel_id, job.message_text});
+
         if (job.type == "once")
         {
             // 1. Delete from database
-            try
-            {
-                ConnectionGuard guard;
-                pqxx::work txn{ guard.get() };
-                txn.exec_params("DELETE FROM scheduled_messages WHERE id = $1;", job.id);
-                txn.commit();
-            }
-            catch (const std::exception& e)
-            {
-                std::cerr << "[Scheduler Error] Failed to delete job ID " << job.id << "from DB: " << e.what() << '\n';
-            }
+            std::thread([job] {
+                try
+                {
+                    ConnectionGuard guard;
+                    pqxx::work txn{ guard.get() };
+                    txn.exec_params("DELETE FROM scheduled_messages WHERE id = $1;", job.id);
+                    txn.commit();
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "[Scheduler Error] Failed to delete job ID " << job.id << "from DB: " << e.what() << '\n';
+                }
 
-            bot.message_create({job.channel_id, job.message_text});
-            std::cout << "[Scheduler] Executed one job ID " << job.id << " to channel " << job.channel_id << '\n';
+                std::cout << "[Scheduler] Executed one job ID " << job.id << " to channel " << job.channel_id << '\n';
+            }).detach();
         }
         else if (job.type == "recurring")
         {
-            // Calculate next run time
-            auto now{ std::chrono::system_clock::now() };
-            auto new_next_run{ job.next_run_time + job.interval };
-            if (new_next_run <= now) {
-                // Skip missed turns during downtime
-                new_next_run = now + job.interval;
-            }
-
-            // Update in DB
-            try
+            std::thread([job, this]
             {
-                ConnectionGuard guard;
-                pqxx::work txn{ guard.get() };
-                txn.exec_params("UPDATE scheduled_messages SET next_run_time = $1 WHERE id = $2;",
-                    format_db_time(new_next_run), job.id);
-                txn.commit();
-            }
-            catch (const std::exception& e)
-            {
-                std::cerr << "[Scheduler Error] Failed to update recurring job ID " << job.id << "in DB: " << e.what() << '\n';
-            }
+                // Calculate next run time
+                auto now{ std::chrono::system_clock::now() };
+                auto new_next_run{ job.next_run_time + job.interval };
+                if (new_next_run <= now) {
+                    // Skip missed turns during downtime
+                    new_next_run = now + job.interval;
+                }
 
-            // Put back in sorted cache
-            {
-                std::lock_guard guard{ mutex_ };
-                ScheduledJob updated_job{ job };
-                updated_job.next_run_time = new_next_run;
-                jobs.insert(updated_job);
-            }
+                // Update in DB
+                try
+                {
+                    ConnectionGuard guard;
+                    pqxx::work txn{ guard.get() };
+                    txn.exec_params("UPDATE scheduled_messages SET next_run_time = $1 WHERE id = $2;",
+                        format_db_time(new_next_run), job.id);
+                    txn.commit();
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "[Scheduler Error] Failed to update recurring job ID " << job.id << "in DB: " << e.what() << '\n';
+                }
 
-            bot.message_create({job.channel_id, job.message_text});
+                // Put back in sorted cache
+                {
+                    std::lock_guard guard{ mutex_ };
+                    ScheduledJob updated_job{ job };
+                    updated_job.next_run_time = new_next_run;
+                    jobs.insert(updated_job);
+                }
+
+                cv_.notify_one();
+            }).detach();
         }
     }
 

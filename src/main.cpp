@@ -95,6 +95,10 @@ int main()
 {
     tzset();
 
+    const char* tzone{ std::getenv("TZ") };
+    if (tzone)
+        std::cout << "Time zone: " << tzone << '\n';
+
     const char *token{ std::getenv("BOT_TOKEN") };
 
     if (token)
