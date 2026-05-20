@@ -129,15 +129,7 @@ int main()
         handler.register_with_discord(bot);
 
         bot.start_timer([](dpp::timer h) {
-            try {
-                ConnectionGuard guard;
-                pqxx::work transaction{ guard.get() };
-                transaction.exec("SELECT 1;");
-                transaction.commit();
-            }
-            catch (const std::exception& e) {
-                std::cerr << "[Database Keep-Alive Warning] Ping failed: " << e.what() << '\n';
-            }
+            ConnectionPool::get_instance().ping_all();
         }, 300);
     });
 

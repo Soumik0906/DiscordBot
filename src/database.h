@@ -70,6 +70,30 @@ public:
         cv_.notify_one();
     }
 
+    void ping_all()
+    {
+        std::lock_guard lock{ mutex_ };
+        size_t pool_size{ pool_.size() };
+        for (size_t i{ 0 }; i < pool_size; ++i)
+        {
+            auto conn{ pool_.front() };
+            pool_.pop();
+            try {
+                if (conn && conn->is_open()) {
+                    pqxx::work w{ *conn };
+                    w.exec("SELECT 1;");
+                    w.commit();
+                }
+            }
+            catch (...) {
+                try {
+                    conn = std::make_shared<pqxx::connection>(connection_string_);
+                } catch (...) {}
+            }
+            pool_.push(conn);
+        }
+    }
+
 private:
     explicit ConnectionPool(size_t pool_size)
     {
