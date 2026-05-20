@@ -1,48 +1,58 @@
 # Build stage
-FROM alpine:latest AS builder
+FROM ubuntu:24.04 AS builder
 
-RUN apk add --no-cache \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
     cmake \
     make \
     g++ \
-    git \
-    openssl-dev \
-    zlib-dev \
-    linux-headers
+    wget \
+    libopus-dev \
+    libsodium-dev \
+    libssl-dev \
+    ca-certificates
 
-# Build and install D++ from source
-WORKDIR /tmp/dpp
-RUN git clone https://github.com/brainboxdotcc/DPP.git . && \
-    cmake -B build \
-    -DDPP_BUILD_TESTS=OFF \
-    -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build -j$(nproc) && \
-    cmake --install build
+# Download and install precompiled D++ deb package
+WORKDIR /tmp
+RUN wget -q https://github.com/brainboxdotcc/DPP/releases/download/v10.1.4/libdpp-10.1.4-linux-x64.deb && \
+    dpkg -i libdpp-10.1.4-linux-x64.deb
 
 # Set up project
 WORKDIR /app
 COPY . .
 
 # Build the bot
-RUN mkdir build && \
+RUN rm -rf build && \
+    mkdir build && \
     cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release && \
     make -j$(nproc)
 
-# Runtime stage
-FROM alpine:latest
 
-# Install only essential runtime dependencies
-RUN apk add --no-cache \
-    libstdc++ \
+# Runtime stage
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install runtime dependencies and precompiled D++ deb package
+RUN apt-get update && apt-get install -y \
+    wget \
+    libopus0 \
+    libsodium23 \
     openssl \
-    zlib
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+RUN wget -q https://github.com/brainboxdotcc/DPP/releases/download/v10.1.4/libdpp-10.1.4-linux-x64.deb && \
+    dpkg -i libdpp-10.1.4-linux-x64.deb && \
+    rm libdpp-10.1.4-linux-x64.deb
 
 WORKDIR /app
 
-# Copy the binary and D++ libraries from the builder
+# Copy the built bot binary
 COPY --from=builder /app/build/discord-bot .
-COPY --from=builder /usr/local/lib/libdpp.so* /usr/lib/
 
 # Run the bot
 CMD ["./discord-bot"]
