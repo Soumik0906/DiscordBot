@@ -58,6 +58,7 @@ parse_datetime(const std::string& date_str,
     tm.tm_hour = time_tm.tm_hour;
     tm.tm_min  = time_tm.tm_min;
     tm.tm_sec  = 0;
+    tm.tm_isdst = -1;
 
     std::time_t final_time = std::mktime(&tm);
 
@@ -169,10 +170,6 @@ class ScheduleCommand : public Command
             }
         }
 
-        auto task{ [&bot, channel_id, message_text]() {
-            bot.message_create(dpp::message(channel_id, message_text));
-        }};
-
         try
         {
             if (subcommand.name == "once")
@@ -190,7 +187,7 @@ class ScheduleCommand : public Command
                     return;
                 }
 
-                scheduler.schedule_once(delay, task);
+                scheduler.schedule_once(channel_id, message_text, target_time);
                 event.reply(dpp::message("Message scheduled successfully!").set_flags(dpp::m_ephemeral));
             }
             else if (subcommand.name == "recurring")
@@ -200,6 +197,11 @@ class ScheduleCommand : public Command
 
                 std::string date_str{ get_string("date") };
                 std::string time_str{ get_string("time") };
+
+                if (date_str.empty() && !time_str.empty())
+                {
+                    date_str = "today";
+                }
 
                 // if date and time are provided, wait until that time before starting the loop
                 if (!date_str.empty() && !time_str.empty())
@@ -213,14 +215,13 @@ class ScheduleCommand : public Command
                         return;
                     }
 
-                    scheduler.schedule_once(delay, [&scheduler = this->scheduler, task, interval]() {
-                        task();
-                        scheduler.schedule_recurring(interval, task);
-                    });
+                    scheduler.schedule_recurring(channel_id, message_text, target_time,
+                        interval, interval_str);
                 }
                 else
                 {
-                    scheduler.schedule_recurring(interval, task);
+                    auto target_time{ std::chrono::system_clock::now() + interval };
+                    scheduler.schedule_recurring(channel_id, message_text, target_time, interval, interval_str);
                 }
 
                 event.reply(dpp::message("Recurring message set!").set_flags(dpp::m_ephemeral));

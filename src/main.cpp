@@ -139,6 +139,9 @@ int main()
         handler.handle_slash_command(bot, event);
     });
 
+    // Start the background scheduler thread
+    scheduler.start();
+
     bot.start(dpp::st_wait);
 
     return 0;
