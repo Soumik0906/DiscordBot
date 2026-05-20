@@ -13,7 +13,7 @@ find_library(libpqxx_LIBRARY NAMES pqxx
 )
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standardargs(libpqxx
+find_package_handle_standard_args(libpqxx
   REQUIRED_VARS libpqxx_LIBRARY libpqxx_INCLUDE_DIR
 )
 
