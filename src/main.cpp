@@ -2,6 +2,7 @@
 #include "commands/ping.h"
 #include "commands/schedule.h"
 #include "scheduler.h"
+#include "database.h"
 
 #include <cstdlib>
 #include <dpp/dpp.h>
@@ -70,6 +71,26 @@ void run_dummy_webserver()
     close(server_fd);
 }
 
+void connect_database()
+{
+    try
+    {
+        ConnectionGuard guard;
+
+        pqxx::work transaction{ guard.get() };
+        pqxx::result res{ transaction.exec("SELECT version()") };
+
+        std::cout << "[Database Startup Check] Connected to Aiven Database: " << guard.get().dbname() << '\n';
+        std::cout << "[Database Startup Check] Postgres version: " << res[0][0].as<std::string>() << '\n';
+
+        transaction.commit();
+    }
+    catch (std::exception& e)
+    {
+        std::cerr << "[Database Startup Check Warning] Failed to connect/verify DB on startup: " << e.what() << '\n';
+    }
+}
+
 int main()
 {
     const char *token{ std::getenv("BOT_TOKEN") };
@@ -80,6 +101,9 @@ int main()
         std::cout << "Bot token not found\n";
         exit(1);
     }
+
+    // connect db
+    connect_database();
 
     // Start dummy webserver on a detached background thread
     std::thread webserver_thread(run_dummy_webserver);
@@ -97,6 +121,18 @@ int main()
     bot.on_ready([&bot, &handler](const dpp::ready_t &event) {
         std::cout << "Logged in as bot " << bot.me.username << '\n';
         handler.register_with_discord(bot);
+
+        bot.start_timer([](dpp::timer h) {
+            try {
+                ConnectionGuard guard;
+                pqxx::work transaction{ guard.get() };
+                transaction.exec("SELECT 1;");
+                transaction.commit();
+            }
+            catch (const std::exception& e) {
+                std::cerr << "[Database Keep-Alive Warning] Ping failed: " << e.what() << '\n';
+            }
+        }, 300);
     });
 
     bot.on_slashcommand([&bot, &handler](const dpp::slashcommand_t &event) {
