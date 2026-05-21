@@ -106,13 +106,14 @@ class ConnectionPool
         std::lock_guard lock{ mutex_ };
         size_t pool_size{ pool_.size() };
 
-        std::cout << "[Database] Pinging " << pool_size << " idle connection(s) in the pool..." << '\n';
+        std::cout << "[Database] Pinging " << pool_size
+                  << " idle connection(s) in the pool..." << '\n';
 
         for (size_t i{ 0 }; i < pool_size; ++i) {
             auto conn{ pool_.front() };
             pool_.pop();
             bool ok{ false };
-            
+
             try {
                 if (conn && conn->is_open()) {
                     pqxx::work w{ *conn };
@@ -120,14 +121,20 @@ class ConnectionPool
                     w.commit();
                     ok = true;
                 }
-            } catch (...) {}
+            } catch (...) {
+            }
 
             if (!ok) {
                 try {
-                    conn = std::make_shared<pqxx::connection>(connection_string_);
-                    std::cout << "[Database] Successfully rebuilt a lost connection in the background." << '\n';
-                } catch (const std::exception& e) {
-                    std::cerr << "[Database Error] Background connection rebuild failed: " << e.what() << '\n';
+                    conn =
+                        std::make_shared<pqxx::connection>(connection_string_);
+                    std::cout << "[Database] Successfully rebuilt a lost "
+                                 "connection in the background."
+                              << '\n';
+                } catch (const std::exception &e) {
+                    std::cerr << "[Database Error] Background connection "
+                                 "rebuild failed: "
+                              << e.what() << '\n';
                 }
             }
 

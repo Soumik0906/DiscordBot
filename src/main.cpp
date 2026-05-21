@@ -1,16 +1,16 @@
 #include "command_handler.h"
 #include "commands/ping.h"
 #include "commands/schedule.h"
-#include "scheduler.h"
 #include "database.h"
+#include "scheduler.h"
 
 #include <cstdlib>
 #include <dpp/dpp.h>
 #include <iostream>
-#include <string>
-#include <thread>
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <string>
+#include <sys/socket.h>
+#include <thread>
 #include <unistd.h>
 
 void run_dummy_webserver()
@@ -32,7 +32,7 @@ void run_dummy_webserver()
     address.sin_addr.s_addr = INADDR_ANY; // Binds to 0.0.0.0 (all interfaces)
     address.sin_port = htons(port);
 
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    if (bind(server_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
         std::cerr << "Failed to bind to port " << port << "\n";
         close(server_fd);
         return;
@@ -50,17 +50,17 @@ void run_dummy_webserver()
         int client_fd{ accept(server_fd, nullptr, nullptr) };
         if (client_fd >= 0) {
             char buffer[1024]{ 0 };
-            int bytes_received{ static_cast<int>(read(client_fd, buffer, sizeof(buffer) - 1)) };
+            int bytes_received{ static_cast<int>(
+                read(client_fd, buffer, sizeof(buffer) - 1)) };
             if (bytes_received > 0) {
-                std::string response{
-                    "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: text/plain\r\n"
-                    "Content-Length: 2\r\n"
-                    "Connection: close\r\n"
-                    "\r\n"
-                    "OK"
-                };
-                ssize_t bytes_written{ write(client_fd, response.c_str(), response.length()) };
+                std::string response{ "HTTP/1.1 200 OK\r\n"
+                                      "Content-Type: text/plain\r\n"
+                                      "Content-Length: 2\r\n"
+                                      "Connection: close\r\n"
+                                      "\r\n"
+                                      "OK" };
+                ssize_t bytes_written{ write(
+                    client_fd, response.c_str(), response.length()) };
                 if (bytes_written < 0) {
                     std::cerr << "Failed to write response to client\n";
                 }
@@ -73,21 +73,22 @@ void run_dummy_webserver()
 
 void connect_database()
 {
-    try
-    {
+    try {
         ConnectionGuard guard;
 
         pqxx::work transaction{ guard.get() };
         pqxx::result res{ transaction.exec("SELECT version()") };
 
-        std::cout << "[Database Startup Check] Connected to Aiven Database: " << guard.get().dbname() << '\n';
-        std::cout << "[Database Startup Check] Postgres version: " << res[0][0].as<std::string>() << '\n';
+        std::cout << "[Database Startup Check] Connected to Aiven Database: "
+                  << guard.get().dbname() << '\n';
+        std::cout << "[Database Startup Check] Postgres version: "
+                  << res[0][0].as<std::string>() << '\n';
 
         transaction.commit();
-    }
-    catch (std::exception& e)
-    {
-        std::cerr << "[Database Startup Check Warning] Failed to connect/verify DB on startup: " << e.what() << '\n';
+    } catch (std::exception &e) {
+        std::cerr << "[Database Startup Check Warning] Failed to "
+                     "connect/verify DB on startup: "
+                  << e.what() << '\n';
     }
 }
 
@@ -95,7 +96,7 @@ int main()
 {
     tzset();
 
-    const char* tzone{ std::getenv("TZ") };
+    const char *tzone{ std::getenv("TZ") };
     if (tzone)
         std::cout << "Time zone: " << tzone << '\n';
 
@@ -117,7 +118,7 @@ int main()
 
     dpp::cluster bot(token);
     CommandHandler handler{};
-    Scheduler scheduler{bot};
+    Scheduler scheduler{ bot };
 
     handler.register_command<PingCommand>();
     handler.register_command<ScheduleCommand>(scheduler);
