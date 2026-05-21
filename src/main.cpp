@@ -3,8 +3,10 @@
 #include "commands/schedule.h"
 #include "database.h"
 #include "scheduler.h"
+#include "games/game_manager.h"
 
 #include <cstdlib>
+#include <dpp/dispatcher.h>
 #include <dpp/dpp.h>
 #include <iostream>
 #include <netinet/in.h>
@@ -132,6 +134,10 @@ int main()
 
     bot.on_slashcommand([&bot, &handler](const dpp::slashcommand_t &event) {
         handler.handle_slash_command(bot, event);
+    });
+
+    bot.on_button_click([](const dpp::button_click_t& event) {
+        GameManager::get_instance().handle_button_click(event);
     });
 
     // Start the background scheduler thread
