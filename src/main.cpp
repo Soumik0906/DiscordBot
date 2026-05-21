@@ -127,10 +127,6 @@ int main()
     bot.on_ready([&bot, &handler](const dpp::ready_t &event) {
         std::cout << "Logged in as bot " << bot.me.username << '\n';
         handler.register_with_discord(bot);
-
-        bot.start_timer([](dpp::timer h) {
-            ConnectionPool::get_instance().ping_all();
-        }, 300);
     });
 
     bot.on_slashcommand([&bot, &handler](const dpp::slashcommand_t &event) {
