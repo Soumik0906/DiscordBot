@@ -6,8 +6,8 @@
 #include <chrono>
 #include <ctime>
 #include <dpp/appcommand.h>
+#include <dpp/message.h>
 #include <iomanip>
-#include <mutex>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -54,7 +54,6 @@ parse_datetime(const std::string &date_str, const std::string &time_str)
     tm.tm_hour = time_tm.tm_hour;
     tm.tm_min = time_tm.tm_min;
     tm.tm_sec = time_tm.tm_sec;
-    tm.tm_sec = 0;
     tm.tm_isdst = -1;
 
     std::time_t final_time = std::mktime(&tm);
@@ -139,8 +138,8 @@ class ScheduleCommand : public Command
                                         "date",
                                         "DD/MM/YYYY (or) today (or) tomorrow",
                                         true))
-                .add_option(
-                    dpp::command_option(dpp::co_string, "time", "HH:MM", true)),
+                .add_option(dpp::command_option(
+                    dpp::co_string, "time", "HH:MM:SS", true)),
 
             dpp::command_option(dpp::co_sub_command,
                                 "recurring",
@@ -159,15 +158,14 @@ class ScheduleCommand : public Command
                                         "DD/MM/YYYY (or) today (or) tomorrow",
                                         false))
                 .add_option(dpp::command_option(
-                    dpp::co_string, "time", "HH:MM", false)),
+                    dpp::co_string, "time", "HH:MM:SS", false)),
+
+            dpp::command_option(dpp::co_sub_command, "list", "List schedules"),
 
             dpp::command_option(
-                dpp::co_sub_command, "list", "List schedules"),
-
-            dpp::command_option(
-                dpp::co_sub_command, "delete", "Delete a schedule")
+                dpp::co_sub_command, "remove", "Delete a schedule")
                 .add_option(
-                    dpp::command_option(dpp::co_string,
+                    dpp::command_option(dpp::co_integer,
                                         "id",
                                         "ID of the schedule (check list)",
                                         true)),
@@ -198,6 +196,7 @@ class ScheduleCommand : public Command
         }
 
         try {
+            // Schedule once
             if (subcommand.name == "once") {
                 std::string date_str{ get_string("date") };
                 std::string time_str{ get_string("time") };
@@ -219,7 +218,9 @@ class ScheduleCommand : public Command
                 event.reply(dpp::message("Message scheduled successfully!")
                                 .set_flags(dpp::m_ephemeral));
 
-            } else if (subcommand.name == "recurring") {
+            }
+            // Schedule recurring
+            else if (subcommand.name == "recurring") {
                 std::string interval_str{ get_string("interval") };
                 auto interval{ parse_interval(interval_str) };
 
@@ -266,7 +267,9 @@ class ScheduleCommand : public Command
                 event.reply(dpp::message("Recurring message set!")
                                 .set_flags(dpp::m_ephemeral));
 
-            } else if (subcommand.name == "list") {
+            }
+            // Schedule list
+            else if (subcommand.name == "list") {
                 dpp::embed embed;
                 embed.set_title("Scheduled Messages");
                 for (const auto &job : scheduler.job_list()) {
@@ -282,6 +285,21 @@ class ScheduleCommand : public Command
                 }
 
                 event.reply(embed);
+            }
+            // Schedule remove
+            else if (subcommand.name == "remove") {
+                auto id = std::get<int64_t>(event.get_parameter("id"));
+
+                if (scheduler.remove_job(id)) {
+                    event.reply(dpp::message("Message #" + std::to_string(id)
+                                             + " was deleted successfully!")
+                                    .set_flags(dpp::m_ephemeral));
+
+                } else {
+                    event.reply(dpp::message("No scheduled message with ID #"
+                                             + std::to_string(id) + " exists.")
+                                    .set_flags(dpp::m_ephemeral));
+                }
             }
 
         } catch (std::exception &e) {

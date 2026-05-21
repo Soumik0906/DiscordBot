@@ -39,6 +39,35 @@ class Scheduler
         return { jobs.begin(), jobs.end() };
     }
 
+    bool remove_job(int id)
+    {
+        {
+            std::lock_guard lock{ mutex_ };
+
+            auto it = std::find_if(
+                jobs.begin(), jobs.end(), [id](const ScheduledJob &job) {
+                    return id == job.id;
+                });
+
+            if (it == jobs.end())
+                return false;
+
+            jobs.erase(it);
+        }
+
+        try {
+            ConnectionGuard guard;
+            pqxx::work txn{ guard.get() };
+            pqxx::result res{ txn.exec_params(
+                "DELETE FROM scheduled_messages WHERE id = $1", id) };
+            txn.commit();
+        } catch (const std::exception &e) {
+            std::cout << "Failed to delete job from DB: " << e.what() << '\n';
+        }
+
+        return true;
+    }
+
     explicit Scheduler(dpp::cluster &b)
         : bot(b)
     {
@@ -49,7 +78,8 @@ class Scheduler
         stop();
     }
 
-    // Loads schedules from the database once and starts the background thread
+    // Loads schedules from the database once and starts the background
+    // thread
     void start()
     {
         if (running.exchange(true))
@@ -66,6 +96,8 @@ class Scheduler
 
             std::lock_guard lock{ mutex_ };
             jobs.clear();
+            bool db_updated{ false };
+
             for (const auto &row : res) {
                 ScheduledJob job;
                 job.id = row["id"].as<int>();
@@ -84,14 +116,43 @@ class Scheduler
                                        ? ""
                                        : row["interval_str"].as<std::string>();
 
+                // Startup catch-up check for missed recurring jobs
+                auto now{ std::chrono::system_clock::now() };
+                if (job.type == "recurring" && job.next_run_time <= now) {
+                    auto new_next_run{ job.next_run_time + job.interval };
+                    if (new_next_run <= now) {
+                        auto missed_turns =
+                            (now - new_next_run) / job.interval + 1;
+                        new_next_run += missed_turns * job.interval;
+                    }
+
+                    std::cout << "[Scheduler] Catching up missed job #"
+                              << job.id << " to next future time: "
+                              << format_db_time(new_next_run) << '\n';
+
+                    job.next_run_time = new_next_run;
+
+                    txn.exec_params("UPDATE scheduled_messages SET "
+                                    "next_run_time = $1 WHERE id = $2;",
+                                    format_db_time(new_next_run),
+                                    job.id);
+
+                    db_updated = true;
+                }
+
                 jobs.insert(job);
             }
+
+            if (db_updated) {
+                txn.commit();
+            }
+
             std::cout << "[Scheduler] Successfully loaded " << jobs.size()
                       << " job(s) from the database.\n";
         } catch (const std::exception &e) {
-            std::cerr
-                << "[Scheduler Error] Failed to load jobs from DB on start: "
-                << e.what() << '\n';
+            std::cerr << "[Scheduler Error] Failed to load jobs from DB on "
+                         "start: "
+                      << e.what() << '\n';
         }
 
         worker_thread = std::thread{ &Scheduler::poll_loop, this };
@@ -173,7 +234,8 @@ class Scheduler
             pqxx::work txn{ guard.get() };
             pqxx::result res = txn.exec_params(
                 "INSERT INTO scheduled_messages (type, channel_id, "
-                "message_text, next_run_time, interval_seconds, interval_str) "
+                "message_text, next_run_time, interval_seconds, "
+                "interval_str) "
                 "VALUES ('recurring', $1, $2, $3, $4, $5) RETURNING id;",
                 static_cast<uint64_t>(channel_id),
                 message_text,
@@ -216,8 +278,8 @@ class Scheduler
     std::thread worker_thread; // main background worker thread for scheduler
     std::atomic<bool> running{ false };
     std::set<ScheduledJob> jobs;
-    mutable std::mutex mutex_;   // makes sure thread doesn't read the vector if
-                                 // slash command is adding a new job
+    mutable std::mutex mutex_;   // makes sure thread doesn't read the vector
+                                 // if slash command is adding a new job
     std::condition_variable cv_; // to sleep and wake up the thread
 
     // Helper to parse PostgreSQL UTC time string to C++ time_point
@@ -270,10 +332,6 @@ class Scheduler
                 // Calculate next run time
                 auto now{ std::chrono::system_clock::now() };
                 auto new_next_run{ job.next_run_time + job.interval };
-                if (new_next_run <= now) {
-                    // Skip missed turns during downtime
-                    new_next_run = now + job.interval;
-                }
 
                 // Update in DB
                 try {
@@ -316,15 +374,15 @@ class Scheduler
 
                 if (soonest_job.next_run_time <= now) {
                     jobs.erase(jobs.begin());
-                    lock.unlock(); // unlock job queue mutex so that others can
-                                   // schedule right away
+                    lock.unlock(); // unlock job queue mutex so that others
+                                   // can schedule right away
 
                     try {
                         execute_job(soonest_job);
                     } catch (const std::exception &e) {
-                        std::cerr
-                            << "[Scheduler Error] Loop task execution failed: "
-                            << e.what() << '\n';
+                        std::cerr << "[Scheduler Error] Loop task "
+                                     "execution failed: "
+                                  << e.what() << '\n';
                     }
                 } else {
                     cv_.wait_until(
@@ -333,8 +391,8 @@ class Scheduler
                                 return true;
                             if (jobs.empty())
                                 return true;
-                            // wake up if soonest job changed to something
-                            // sooner
+                            // wake up if soonest job changed to
+                            // something sooner
                             return jobs.begin()->next_run_time
                                    < soonest_job.next_run_time;
                         });
