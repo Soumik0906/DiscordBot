@@ -9,6 +9,7 @@
 #include <mutex>
 #include <pqxx/pqxx>
 #include <queue>
+#include <stdexcept>
 #include <thread>
 
 class ConnectionPool
@@ -28,20 +29,27 @@ class ConnectionPool
     }
 
     // Leases a connection from the pool
-    // Blocks if none are free
     std::shared_ptr<pqxx::connection> acquire()
     {
-        std::unique_lock lock(mutex_);
-        cv_.wait(lock, [this]() { return !pool_.empty(); });
+        std::shared_ptr<pqxx::connection> conn;
+        {
+            std::unique_lock lock(mutex_);
+            if (!cv_.wait_for(lock, std::chrono::seconds(5), [this] {
+                    return !pool_.empty();
+                })) {
+                throw std::runtime_error(
+                    "Timed out waiting for db connection!");
+            }
 
-        auto conn{ pool_.front() };
-        pool_.pop();
+            conn = pool_.front();
+            pool_.pop();
+        }
 
         try {
             if (!conn || !conn->is_open()) {
                 std::cout
                     << "[Database] Re-establishing lost/inactive connection\n";
-                conn = std::make_shared<pqxx::connection>(connection_string_);
+                conn = create_connection();
             } else {
                 pqxx::work w(*conn);
                 w.exec("SELECT 1;");
@@ -51,7 +59,7 @@ class ConnectionPool
             std::cerr << "[Database Warning] Connection check/repair failed: "
                       << e.what() << ". Attempting direct rebuild...\n";
             try {
-                conn = std::make_shared<pqxx::connection>(connection_string_);
+                conn = create_connection();
             } catch (const std::exception &err) {
                 std::cerr
                     << "[Database Error] Full connection recovery failed: "
@@ -62,15 +70,20 @@ class ConnectionPool
         return conn;
     }
 
-    void release(const std::shared_ptr<pqxx::connection> &conn)
+    void release(std::shared_ptr<pqxx::connection> &conn)
     {
-        if (!conn) {
-            return;
+        if (!conn || !conn->is_open()) {
+            try {
+                conn = create_connection();
+            } catch (...) {
+            }
         }
+
         {
             std::lock_guard lock(mutex_);
             pool_.push(conn);
         }
+
         cv_.notify_one();
     }
 
@@ -103,15 +116,25 @@ class ConnectionPool
 
     void ping_all()
     {
-        std::lock_guard lock{ mutex_ };
-        size_t pool_size{ pool_.size() };
+        size_t pool_size{ 0 };
+        {
+            std::lock_guard lock{ mutex_ };
+            pool_size = pool_.size();
+        }
 
         std::cout << "[Database] Pinging " << pool_size
                   << " idle connection(s) in the pool..." << '\n';
 
         for (size_t i{ 0 }; i < pool_size; ++i) {
-            auto conn{ pool_.front() };
-            pool_.pop();
+            std::shared_ptr<pqxx::connection> conn;
+            {
+                std::lock_guard lock{ mutex_ };
+                if (pool_.empty())
+                    break;
+                conn = pool_.front();
+                pool_.pop();
+            }
+
             bool ok{ false };
 
             try {
@@ -126,8 +149,7 @@ class ConnectionPool
 
             if (!ok) {
                 try {
-                    conn =
-                        std::make_shared<pqxx::connection>(connection_string_);
+                    conn = create_connection();
                     std::cout << "[Database] Successfully rebuilt a lost "
                                  "connection in the background."
                               << '\n';
@@ -138,7 +160,11 @@ class ConnectionPool
                 }
             }
 
-            pool_.push(conn);
+            {
+                std::lock_guard lock{ mutex_ };
+                pool_.push(conn);
+            }
+            cv_.notify_one();
         }
     }
 
@@ -195,6 +221,26 @@ class ConnectionPool
 
         ping_running_ = true;
         ping_thread_ = std::thread(&ConnectionPool::ping_loop, this);
+    }
+
+    std::shared_ptr<pqxx::connection> create_connection()
+    {
+        constexpr int max_attempts = 3;
+
+        for (int i = 0; i < max_attempts; ++i) {
+            try {
+                auto conn =
+                    std::make_shared<pqxx::connection>(connection_string_);
+
+                if (conn->is_open())
+                    return conn;
+            } catch (const std::exception &) {
+            }
+
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+
+        throw std::runtime_error("Unable to establish DB connection");
     }
 
     std::string connection_string_;
