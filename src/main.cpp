@@ -1,8 +1,8 @@
 #include "command_handler.h"
 #include "commands/ping.h"
+#include "commands/rps.h"
 #include "commands/schedule.h"
 #include "database.h"
-#include "scheduler.h"
 #include "games/game_manager.h"
 
 #include <cstdlib>
@@ -124,6 +124,7 @@ int main()
 
     handler.register_command<PingCommand>();
     handler.register_command<ScheduleCommand>(scheduler);
+    handler.register_command<RpsCommand>();
 
     bot.on_log(dpp::utility::cout_logger());
 
@@ -136,7 +137,7 @@ int main()
         handler.handle_slash_command(bot, event);
     });
 
-    bot.on_button_click([](const dpp::button_click_t& event) {
+    bot.on_button_click([](const dpp::button_click_t &event) {
         GameManager::get_instance().handle_button_click(event);
     });
 
