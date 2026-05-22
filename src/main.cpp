@@ -1,4 +1,5 @@
 #include "command_handler.h"
+#include "commands/eightball.h"
 #include "commands/ping.h"
 #include "commands/rps.h"
 #include "commands/schedule.h"
@@ -125,6 +126,7 @@ int main()
     handler.register_command<PingCommand>();
     handler.register_command<ScheduleCommand>(scheduler);
     handler.register_command<RpsCommand>();
+    handler.register_command<EightBallCommand>();
 
     bot.on_log(dpp::utility::cout_logger());
 
