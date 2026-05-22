@@ -196,6 +196,8 @@ class ScheduleCommand : public Command
         }
 
         try {
+            event.thinking(true);
+
             // Schedule once
             if (subcommand.name == "once") {
                 std::string date_str{ get_string("date") };
@@ -208,15 +210,14 @@ class ScheduleCommand : public Command
                     target_time - now) };
 
                 if (delay.count() <= 0) {
-                    event.reply(
-                        dpp::message("Cannot schedule a message in the past!")
-                            .set_flags(dpp::m_ephemeral));
+                    event.edit_original_response(
+                        dpp::message("Cannot schedule a message in the past!"));
                     return;
                 }
 
                 scheduler.schedule_once(channel_id, message_text, target_time);
-                event.reply(dpp::message("Message scheduled successfully!")
-                                .set_flags(dpp::m_ephemeral));
+                event.edit_original_response(
+                    dpp::message("Message scheduled successfully!"));
 
             }
             // Schedule recurring
@@ -242,10 +243,8 @@ class ScheduleCommand : public Command
                     };
 
                     if (delay.count() <= 0) {
-                        event.reply(
-                            dpp::message(
-                                "Cannot schedule a message in the past!")
-                                .set_flags(dpp::m_ephemeral));
+                        event.edit_original_response(dpp::message(
+                            "Cannot schedule a message in the past!"));
                         return;
                     }
 
@@ -264,8 +263,8 @@ class ScheduleCommand : public Command
                                                  interval_str);
                 }
 
-                event.reply(dpp::message("Recurring message set!")
-                                .set_flags(dpp::m_ephemeral));
+                event.edit_original_response(
+                    dpp::message("Recurring message set!"));
 
             }
             // Schedule list
@@ -284,29 +283,27 @@ class ScheduleCommand : public Command
                                     job.message_text + "\n⏰ " + time_ss.str());
                 }
 
-                event.reply(embed);
+                event.edit_original_response(embed);
             }
             // Schedule remove
             else if (subcommand.name == "remove") {
                 auto id = std::get<int64_t>(event.get_parameter("id"));
 
                 if (scheduler.remove_job(id)) {
-                    event.reply(dpp::message("Message #" + std::to_string(id)
-                                             + " was deleted successfully!")
-                                    .set_flags(dpp::m_ephemeral));
+                    event.edit_original_response(
+                        dpp::message("Message #" + std::to_string(id)
+                                     + " was deleted successfully!"));
 
                 } else {
-                    event.reply(dpp::message("No scheduled message with ID #"
-                                             + std::to_string(id) + " exists.")
-                                    .set_flags(dpp::m_ephemeral));
+                    event.edit_original_response(
+                        dpp::message("No scheduled message with ID #"
+                                     + std::to_string(id) + " exists."));
                 }
             }
 
         } catch (std::exception &e) {
-            event.reply(
-                dpp::message(std::string{ "Failed to schedule message! " }
-                             + e.what())
-                    .set_flags(dpp::m_ephemeral));
+            event.edit_original_response(dpp::message(
+                std::string{ "Failed to schedule message! " } + e.what()));
         }
     }
 };
