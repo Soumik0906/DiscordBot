@@ -7,7 +7,7 @@
 class RockPaperScissors : public GameBase
 {
   private:
-    int p1_choice = 0; // 0 = None, 1 = Rock, 2 = Scissors, 3 = Paper
+    int p1_choice = 0; // 0 = None, 1 = Rock, 2 = Paper, 3 = Scissors
     int p2_choice = 0;
 
     std::string get_choice_emoji(int choice) const;
@@ -29,5 +29,5 @@ class RockPaperScissors : public GameBase
 
     dpp::message get_game_screen() override;
 
-    void handle_interaction(const dpp::button_click_t& event) override;
+    void handle_interaction(const dpp::button_click_t &event) override;
 };
