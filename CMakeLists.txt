@@ -7,6 +7,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h")
 
 add_executable(${PROJECT_NAME} ${SOURCES})
+add_compile_definitions(DPP_CORO)
 
 find_package(DPP REQUIRED)
 find_package(Threads REQUIRED)
@@ -22,7 +23,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         ${DPP_INCLUDE_DIR}
 )
 
+
 set_target_properties(${PROJECT_NAME} PROPERTIES
-        CXX_STANDARD 20
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
 )

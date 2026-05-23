@@ -104,15 +104,15 @@ dpp::message RockPaperScissors::get_game_screen()
     return msg;
 }
 
-void RockPaperScissors::handle_interaction(const dpp::button_click_t &event)
+dpp::task<void> RockPaperScissors::handle_interaction(const dpp::button_click_t &event)
 {
     dpp::snowflake user_id = event.command.usr.id;
     bool is_p1 = (user_id == players[0]);
 
     if ((is_p1 && p1_choice != 0) || (!is_p1 && p2_choice != 0)) {
-        event.reply(dpp::message("You have already made your move!")
+        co_await event.co_reply(dpp::message("You have already made your move!")
                         .set_flags(dpp::m_ephemeral));
-        return;
+        co_return;
     }
 
     int choice = 0;
@@ -124,7 +124,7 @@ void RockPaperScissors::handle_interaction(const dpp::button_click_t &event)
         choice = 3;
 
     if (choice == 0)
-        return;
+        co_return;
 
     if (is_p1)
         p1_choice = choice;
@@ -134,7 +134,7 @@ void RockPaperScissors::handle_interaction(const dpp::button_click_t &event)
     if (p1_choice != 0 && p2_choice != 0)
         is_finished = true;
 
-    event.reply(dpp::message("You chose " + get_choice_name(choice) + " "
+    co_await event.co_reply(dpp::message("You chose " + get_choice_name(choice) + " "
                              + get_choice_emoji(choice) + "!")
                     .set_flags(dpp::m_ephemeral));
 
@@ -143,5 +143,6 @@ void RockPaperScissors::handle_interaction(const dpp::button_click_t &event)
     public_board.id = event.command.message_id;
     public_board.channel_id = channel_id;
 
-    bot->message_edit(public_board);
+    co_await bot->co_message_edit(public_board);
+    co_return;
 }

@@ -30,7 +30,7 @@ class GameBase
 
     virtual dpp::message get_game_screen() = 0;
 
-    virtual void handle_interaction(const dpp::button_click_t &event) = 0;
+    virtual dpp::task<void> handle_interaction(const dpp::button_click_t &event) = 0;
 
     bool has_player(dpp::snowflake user_id) const
     {

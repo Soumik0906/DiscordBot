@@ -173,7 +173,7 @@ class ScheduleCommand : public Command
         };
     }
 
-    void run(dpp::cluster &bot, const dpp::slashcommand_t &event) override
+    dpp::task<void> run(dpp::cluster &bot, const dpp::slashcommand_t &event) override
     {
         auto subcommand{ event.command.get_command_interaction().options[0] };
 
@@ -195,8 +195,10 @@ class ScheduleCommand : public Command
             }
         }
 
+        std::string error_message;
+
         try {
-            event.thinking(true);
+            co_await event.co_thinking(true);
 
             // Schedule once
             if (subcommand.name == "once") {
@@ -210,13 +212,13 @@ class ScheduleCommand : public Command
                     target_time - now) };
 
                 if (delay.count() <= 0) {
-                    event.edit_original_response(
+                    co_await event.co_edit_original_response(
                         dpp::message("Cannot schedule a message in the past!"));
-                    return;
+                    co_return;
                 }
 
                 scheduler.schedule_once(channel_id, message_text, target_time);
-                event.edit_original_response(
+                co_await event.co_edit_original_response(
                     dpp::message("Message scheduled successfully!"));
 
             }
@@ -243,9 +245,9 @@ class ScheduleCommand : public Command
                     };
 
                     if (delay.count() <= 0) {
-                        event.edit_original_response(dpp::message(
+                        co_await event.co_edit_original_response(dpp::message(
                             "Cannot schedule a message in the past!"));
-                        return;
+                        co_return;
                     }
 
                     scheduler.schedule_recurring(channel_id,
@@ -263,7 +265,7 @@ class ScheduleCommand : public Command
                                                  interval_str);
                 }
 
-                event.edit_original_response(
+                co_await event.co_edit_original_response(
                     dpp::message("Recurring message set!"));
 
             }
@@ -283,27 +285,34 @@ class ScheduleCommand : public Command
                                     job.message_text + "\n⏰ " + time_ss.str());
                 }
 
-                event.edit_original_response(embed);
+                co_await event.co_edit_original_response(embed);
             }
             // Schedule remove
             else if (subcommand.name == "remove") {
                 auto id = std::get<int64_t>(event.get_parameter("id"));
 
                 if (scheduler.remove_job(id)) {
-                    event.edit_original_response(
+                    co_await event.co_edit_original_response(
                         dpp::message("Message #" + std::to_string(id)
                                      + " was deleted successfully!"));
 
                 } else {
-                    event.edit_original_response(
+                    co_await event.co_edit_original_response(
                         dpp::message("No scheduled message with ID #"
                                      + std::to_string(id) + " exists."));
                 }
             }
 
         } catch (std::exception &e) {
-            event.edit_original_response(dpp::message(
-                std::string{ "Failed to schedule message! " } + e.what()));
+            error_message = e.what(); 
         }
+        
+        if (!error_message.empty()) {
+            co_await event.co_edit_original_response(
+                dpp::message("Failed to schedule message! " + error_message)
+            );
+        }
+
+        co_return;
     }
 };

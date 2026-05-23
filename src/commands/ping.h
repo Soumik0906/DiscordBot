@@ -17,7 +17,7 @@ class PingCommand : public Command
         return "Ping the bot";
     }
 
-    void run(dpp::cluster &bot, const dpp::slashcommand_t &event) override
+    dpp::task<void> run(dpp::cluster &bot, const dpp::slashcommand_t &event) override
     {
         dpp::discord_client *shard{ event.from() };
         double ws_ping{ shard ? shard->websocket_ping * 1000.0 : -1.0 };
@@ -33,6 +33,7 @@ class PingCommand : public Command
         msg << "- WS:  " << (ws_ping < 0 ? "N/A" : std::to_string(ws_ping))
             << " ms";
 
-        event.reply(msg.str());
+        co_await event.co_reply(msg.str());
+        co_return;
     }
 };

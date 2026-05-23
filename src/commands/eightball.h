@@ -51,7 +51,7 @@ class EightBallCommand : public Command
         };
     }
 
-    void run(dpp::cluster& bot, const dpp::slashcommand_t& event) override 
+    dpp::task<void> run(dpp::cluster& bot, const dpp::slashcommand_t& event) override 
     {
         static thread_local std::mt19937 gen{ std::random_device{}() };
 
@@ -69,6 +69,7 @@ class EightBallCommand : public Command
         .add_field("❓ Question\n", ques)
         .add_field("🔮 Answer\n", response);
 
-        event.reply(embed);
+        co_await event.co_reply(embed);
+        co_return;
     }
 };

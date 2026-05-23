@@ -135,12 +135,14 @@ int main()
         handler.register_with_discord(bot);
     });
 
-    bot.on_slashcommand([&bot, &handler](const dpp::slashcommand_t &event) {
-        handler.handle_slash_command(bot, event);
+    bot.on_slashcommand([&bot, &handler](const dpp::slashcommand_t &event) -> dpp::task<void> {
+        co_await handler.handle_slash_command(bot, event);
+        co_return;
     });
 
-    bot.on_button_click([](const dpp::button_click_t &event) {
-        GameManager::get_instance().handle_button_click(event);
+    bot.on_button_click([](const dpp::button_click_t &event) -> dpp::task<void> {
+        co_await GameManager::get_instance().handle_button_click(event);
+        co_return;
     });
 
     // Start the background scheduler thread

@@ -21,5 +21,5 @@ class Command
     }
 
     // The execution logic for the command
-    virtual void run(dpp::cluster &bot, const dpp::slashcommand_t &event) = 0;
+    virtual dpp::task<void> run(dpp::cluster &bot, const dpp::slashcommand_t &event) = 0;
 };

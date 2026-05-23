@@ -29,5 +29,5 @@ class RockPaperScissors : public GameBase
 
     dpp::message get_game_screen() override;
 
-    void handle_interaction(const dpp::button_click_t &event) override;
+    dpp::task<void> handle_interaction(const dpp::button_click_t &event) override;
 };

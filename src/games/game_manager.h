@@ -56,23 +56,23 @@ class GameManager
         active_games.erase(channel_id);
     }
 
-    void handle_button_click(const dpp::button_click_t &event)
+    dpp::task<void> handle_button_click(const dpp::button_click_t &event)
     {
         dpp::snowflake channel_id = event.command.channel_id;
         auto game = get_game(channel_id);
-        if (!game)
-            return;
+        if (!game) co_return;
 
         if (!game->has_player(event.command.usr.id)) {
-            event.reply(dpp::message("You are not a participant in this game!")
+            co_await event.co_reply(dpp::message("You are not a participant in this game!")
                             .set_flags(dpp::m_ephemeral));
-            return;
+            co_return;
         }
 
-        game->handle_interaction(event);
+        co_await game->handle_interaction(event);
 
         if (game->is_over()) {
             end_game(channel_id);
         }
+        co_return;
     }
 };

@@ -311,7 +311,7 @@ class Scheduler
 
         if (job.type == "once") {
             // 1. Delete from database
-            std::thread([job] {
+            [job] -> dpp::job {
                 try {
                     ConnectionGuard guard;
                     pqxx::work txn{ guard.get() };
@@ -326,9 +326,11 @@ class Scheduler
 
                 std::cout << "[Scheduler] Executed one job ID " << job.id
                           << " to channel " << job.channel_id << '\n';
-            }).detach();
-        } else if (job.type == "recurring") {
-            std::thread([job, this] {
+                co_return;
+            }();
+        } 
+        else if (job.type == "recurring") {
+            [job, this] -> dpp::job {
                 // Calculate next run time
                 auto now{ std::chrono::system_clock::now() };
                 auto new_next_run{ job.next_run_time + job.interval };
@@ -357,7 +359,8 @@ class Scheduler
                 }
 
                 cv_.notify_one();
-            }).detach();
+                co_return;
+            }();
         }
     }
 

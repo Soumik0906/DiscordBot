@@ -126,15 +126,16 @@ class CommandHandler
     }
 
     // Dispatch the command when the slash command event triggers
-    void handle_slash_command(dpp::cluster &bot,
+    dpp::task<void> handle_slash_command(dpp::cluster &bot,
                               const dpp::slashcommand_t &event)
     {
         std::string name = event.command.get_command_name();
         auto it = commands.find(name);
         if (it != commands.end()) {
-            it->second->run(bot, event);
+            co_await it->second->run(bot, event);
         } else {
-            event.reply("Unknown command!");
+            co_await event.co_reply("Unknown command!");
         }
+        co_return;
     }
 };

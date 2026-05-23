@@ -23,7 +23,7 @@ class RpsCommand : public Command
             dpp::co_user, "opponent", "The user you want to challenge", true) };
     }
 
-    void run(dpp::cluster &bot, const dpp::slashcommand_t &event) override
+    dpp::task<void> run(dpp::cluster &bot, const dpp::slashcommand_t &event) override
     {
         dpp::snowflake challenger = event.command.usr.id;
         dpp::snowflake opponent =
@@ -31,9 +31,9 @@ class RpsCommand : public Command
         dpp::snowflake channel_id = event.command.channel_id;
 
         if (challenger == opponent) {
-            event.reply(dpp::message("You cannot challenge yourself!")
+            co_await event.co_reply(dpp::message("You cannot challenge yourself!")
                             .set_flags(dpp::m_ephemeral));
-            return;
+            co_return;
         }
 
         auto game = std::make_shared<RockPaperScissors>(
@@ -42,13 +42,14 @@ class RpsCommand : public Command
         bool started = GameManager::get_instance().start_game(channel_id, game);
 
         if (!started) {
-            event.reply(
+            co_await event.co_reply(
                 dpp::message("A game is already active in this channel!")
                     .set_flags(dpp::m_ephemeral));
-            return;
+            co_return;
         }
 
         // Send the initial public game screen
-        event.reply(game->get_game_screen());
+        co_await event.co_reply(game->get_game_screen());
+        co_return;
     }
 };
